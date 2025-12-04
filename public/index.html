@@ -26,7 +26,7 @@
             }
         }
     </script>
-    <!-- html2canvas is now unnecessary for the screenshot function, but remains in the browser cache -->
+    <!-- Removed html2canvas import -->
     
     <!-- Firebase Imports (Minimal Set) -->
     <script type="module">
@@ -234,23 +234,23 @@
 
             window.currentPlan.forEach(day => {
                 const prayerHtml = day.prayerPrompt 
-                    ? `<p style="font-weight: bold; color: #008080; margin-top: 15px;">Prayer Prompt:</p>
-                       <p style="color: #444; margin-bottom: 5px;">${day.prayerPrompt}</p>`
+                    ? `<p class="print-prayer-prompt">Prayer Prompt:</p>
+                       <p class="print-prayer-text">${day.prayerPrompt}</p>`
                     : '';
                     
                 const questionsHtml = day.reflectionQuestions && day.reflectionQuestions.length > 0
-                    ? `<p style="font-weight: bold; color: #333; margin-top: 15px;">Journal Prompts:</p>
-                       <ul style="list-style-type: disc; margin-left: 20px; color: #555;">
+                    ? `<p class="print-journal-prompt">Journal Prompts:</p>
+                       <ul class="print-journal-list">
                            ${day.reflectionQuestions.map(q => `<li>${q}</li>`).join('')}
                        </ul>`
                     : '';
 
                 // NOTE: Passage text is ALWAYS included in printout for the detailed print view
                 printContent += `
-                    <div style="border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 8px;">
-                        <h3 style="color: #008080; font-size: 18px; font-weight: bold; margin-bottom: 5px;">Day ${day.day}: ${day.theme}</h3>
-                        <p style="color: #FFD700; font-weight: 600; font-size: 14px; margin-bottom: 10px;">Scripture: ${day.scripture}</p>
-                        <p style="color: #444; font-style: italic; white-space: pre-wrap; margin-bottom: 10px; line-height: 1.5;">${day.passageText}</p>
+                    <div class="print-day-card">
+                        <h3 class="print-day-title">Day ${day.day}: ${day.theme}</h3>
+                        <p class="print-scripture-ref">Scripture: ${day.scripture}</p>
+                        <p class="print-passage-text">${day.passageText}</p>
                         ${prayerHtml}
                         ${questionsHtml}
                     </div>
@@ -264,19 +264,20 @@
             printWindow.document.write(`
                 <html>
                     <head>
-                        <title>Simple Reading Plan Printout</title>
+                        <title>Detailed Reading Plan Printout</title>
                         <style>
-                            /* Styles for Simple Printout */
+                            /* Optimized Styles for Detailed Printout */
                             @media print {
-                                h1, h2, h3, p, ul, li { margin: 0; padding: 0; }
-                                h1 { font-size: 24pt; color: #008080; }
+                                body { margin: 20px; font-family: sans-serif; }
+                                .print-day-card { border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 4px; }
+                                h1 { font-size: 24pt; color: #008080; margin: 0; padding: 0; }
                                 h2 { font-size: 14pt; color: #555; margin-bottom: 20px; }
                                 h3 { font-size: 16pt; color: #008080; margin-top: 10px; }
-                                p { font-size: 10pt; color: #444; line-height: 1.5; }
-                                li { font-size: 10pt; color: #555; }
+                                .print-scripture-ref { font-size: 10pt; font-weight: 600; color: #006666; margin-bottom: 5px; }
+                                .print-passage-text { font-size: 10pt; color: #444; font-style: italic; white-space: pre-wrap; line-height: 1.5; margin-bottom: 10px; }
+                                .print-prayer-prompt, .print-journal-prompt { font-weight: bold; color: #008080; margin-top: 15px; margin-bottom: 5px; font-size: 10pt; }
+                                .print-journal-list { list-style-type: disc; margin-left: 20px; color: #555; font-size: 10pt; }
                                 .break-after { page-break-after: always; }
-                                body { margin: 20px; }
-                                div[style] { border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 4px; }
                             }
                         </style>
                     </head>
@@ -314,9 +315,9 @@
                 <div class="printable-content p-8">
                     <h1 style="text-align: center; color: #008080; font-size: 24px; font-weight: bold; margin-bottom: 5px;">BIBLEPLAN.AI Habit Tracker</h1>
                     <h2 style="text-align: center; color: #555; font-size: 16px; margin-bottom: 20px;">Topic: ${promptText} (${durationText} Days)</h2>
-                    <table class="tracker-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                    <table class="tracker-table">
                         <thead>
-                            <tr style="background-color: #f0f0f0;">
+                            <tr class="tracker-header">
                                 <th style="width: 10%;">Day</th>
                                 <th style="width: 25%;">Theme</th>
                                 <th style="width: 35%;">Scripture</th>
@@ -338,7 +339,7 @@
                     <head>
                         <title>Habit Tracker Printout</title>
                         <style>
-                            /* Styles for Habit Tracker Printout */
+                            /* Optimized Styles for Tracker Printout */
                             @media print {
                                 h1, h2 { margin: 0; padding: 0; }
                                 h1 { font-size: 24pt; color: #008080; }
@@ -354,7 +355,7 @@
                                     text-align: left;
                                     font-size: 10pt;
                                 }
-                                .tracker-table th {
+                                .tracker-header {
                                     background-color: #f0f0f0;
                                 }
                                 body { margin: 20px; }
@@ -368,83 +369,83 @@
             printWindow.print();
         }
 
-        // --- SCREENSHOT FUNCTION ---
+        // --- NEW: Simplified Print Function for Screenshot/Minimal View ---
 
-        window.screenshotPlan = function() {
-            const planOutput = document.getElementById('results-area'); 
-            const screenshotButton = document.getElementById('screenshot-button');
-            const originalButtonText = screenshotButton.textContent;
-            
-            if (!planOutput || !window.currentPlan) {
-                displayError("No plan generated to screenshot yet.");
+        window.printMinimalList = function() {
+            if (!window.currentPlan || !window.currentPlanDetails) {
+                displayError("No plan generated yet to create a snapshot.");
                 return;
             }
-            
-            screenshotButton.disabled = true;
-            screenshotButton.textContent = 'Processing...';
 
-            // 1. Generate the minimalist HTML content (Day and Scripture only)
-            const minimalistHtml = `
-                <div style="padding: 20px; background-color: #ffffff; font-family: sans-serif; font-size: 16px;">
-                    <h1 style="color: #006666; font-size: 24px; font-weight: bold; margin-bottom: 15px;">Bible Plan: ${window.currentPlanDetails.prompt}</h1>
-                    <table style="width: 100%; border-collapse: collapse;">
-                        ${window.currentPlan.map(day => `
-                            <tr style="border-bottom: 1px solid #ddd;">
-                                <td style="padding: 8px 0; width: 30%; color: #008080; font-weight: bold;">Day ${day.day}</td>
-                                <td style="padding: 8px 0; width: 70%; color: #006666;">${day.scripture}</td>
-                            </tr>
-                        `).join('')}
-                    </table>
+            const promptText = window.currentPlanDetails.prompt;
+            const durationText = window.currentPlanDetails.duration;
+            const includePrompts = document.getElementById('journal-prompts').checked;
+            const includePrayer = document.getElementById('prayer-prompt').checked;
+
+            let listContent = window.currentPlan.map(day => {
+                let dayContent = `<li class="list-item">
+                    <span class="day-ref">Day ${day.day}:</span> 
+                    <span class="scripture-ref">${day.scripture}</span>
+                </li>`;
+
+                if (includePrayer && day.prayerPrompt) {
+                    dayContent += `<li class="prompt-item prayer-prompt">Prayer: ${day.prayerPrompt}</li>`;
+                }
+
+                if (includePrompts && day.reflectionQuestions && day.reflectionQuestions.length > 0) {
+                    const prompts = day.reflectionQuestions.map((q, i) => `(${i+1}) ${q}`).join(' ');
+                    dayContent += `<li class="prompt-item journal-prompt">Journal: ${prompts}</li>`;
+                }
+                
+                return dayContent;
+            }).join('');
+
+            let printContent = `
+                <div class="minimal-list-content">
+                    <h1 class="list-title">BIBLEPLAN.AI Snapshot</h1>
+                    <h2 class="list-subtitle">Topic: ${promptText} (${durationText} Days)</h2>
+                    <ul class="plan-list">
+                        ${listContent}
+                    </ul>
                 </div>
             `;
-            
-            // 2. Create a temporary container for html2canvas
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = minimalistHtml;
-            tempDiv.style.position = 'fixed';
-            tempDiv.style.top = '-9999px'; 
-            document.body.appendChild(tempDiv);
 
-            // 3. Capture the temporary div
-            html2canvas(tempDiv, { 
-                allowTaint: true,
-                useCORS: true,
-                scale: 2 
-            }).then(canvas => {
-                const base64image = canvas.toDataURL('image/png');
-                
-                // Create a temporary link element for downloading
-                const link = document.createElement('a');
-                const planName = window.currentPlanDetails.prompt || 'BiblePlan';
-                
-                link.download = `BiblePlan_Simple_${planName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20)}.png`;
-                link.href = base64image;
-                
-                // Trigger the download
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                
-                // Cleanup temporary div
-                document.body.removeChild(tempDiv);
-
-                screenshotButton.textContent = 'Saved!';
-                setTimeout(() => {
-                    screenshotButton.textContent = originalButtonText;
-                    screenshotButton.disabled = false;
-                }, 3000);
-
-            }).catch(error => {
-                console.error('Screenshot failed:', error);
-                // Cleanup temporary div if it exists
-                if (tempDiv.parentNode) document.body.removeChild(tempDiv);
-                
-                displayError('Failed to capture image. Try printing instead.');
-                screenshotButton.textContent = originalButtonText;
-                screenshotButton.disabled = false;
-            });
+            const printWindow = window.open('', '', 'height=600,width=800');
+            printWindow.document.write(`
+                <html>
+                    <head>
+                        <title>Minimal Plan Snapshot</title>
+                        <style>
+                            /* Minimal Styles for Screenshot/PDF Save */
+                            body { margin: 0; padding: 0; font-family: sans-serif; background-color: white; }
+                            .minimal-list-content { padding: 30px; max-width: 500px; margin: 0 auto; }
+                            .list-title { font-size: 20px; color: #006666; font-weight: bold; text-align: center; margin-bottom: 5px; }
+                            .list-subtitle { font-size: 14px; color: #555; text-align: center; margin-bottom: 20px; }
+                            .plan-list { list-style: none; padding: 0; margin: 0; }
+                            .list-item { 
+                                padding: 8px 0; 
+                                border-bottom: 1px dashed #ddd;
+                                display: flex;
+                                font-size: 13px;
+                            }
+                            .prompt-item {
+                                padding: 4px 0 8px 0;
+                                font-size: 11px;
+                                color: #444;
+                                border-bottom: 1px dashed #ddd;
+                                line-height: 1.3;
+                            }
+                            .day-ref { font-weight: bold; color: #008080; width: 30%; flex-shrink: 0; }
+                            .scripture-ref { color: #006666; width: 70%; }
+                        </style>
+                    </head>
+                    <body>${printContent}</body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.print(); // Triggers the browser print dialog (Save as PDF/Image)
         }
-        
+
         // --- MAIN GENERATION LOGIC ---
 
         window.generatePlan = async function(event) {
@@ -723,7 +724,7 @@
             <div id="print-options" class="bg-white p-6 md:p-8 rounded-xl card mb-10 hidden">
                 <h2 class="text-xl font-semibold mb-4 text-gray-700">Output Options</h2>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <button id="screenshot-button" onclick="screenshotPlan()" class="w-full bg-secondary-gold text-dark-teal py-3 rounded-xl font-semibold hover:bg-dark-teal transition duration-300 focus:outline-none focus:ring-4 focus:ring-secondary-gold focus:ring-opacity-50">
+                    <button id="screenshot-button" onclick="printMinimalList()" class="w-full bg-secondary-gold text-dark-teal py-3 rounded-xl font-semibold hover:bg-dark-teal transition duration-300 focus:outline-none focus:ring-4 focus:ring-secondary-gold focus:ring-opacity-50">
                         Screenshot Plan
                     </button>
                     <button onclick="printSimplePlan()" class="w-full bg-secondary-gold text-dark-teal py-3 rounded-xl font-semibold hover:bg-dark-teal transition duration-300 focus:outline-none focus:ring-4 focus:ring-secondary-gold focus:ring-opacity-50">
