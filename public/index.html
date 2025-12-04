@@ -36,19 +36,17 @@
         window.currentPlanDetails = null;
         window.userId = null;
         
-        // Removed unused Firestore imports since history/sharing is gone.
+        // --- MINIMAL FIREBASE IMPORTS (No Firestore since history/sharing is gone) ---
         import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        // NOTE: Firestore functions were slightly adjusted to match best practices
-        import { getFirestore, doc, getDoc, addDoc, setDoc, onSnapshot, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- GEMINI API CONSTANTS ---
-        const API_KEY = "AIzaSyD0aD4-U-uqZ000Mwo1zJ8kaK_9nPer-YY"; 
+        const API_KEY = "AIzaSyD0aD4-U-uqZ000Mwo1zJ8kaK_9nPer-YY"; // <-- PASTE YOUR GEMINI API KEY HERE AND RE-DEPLOY
         const MODEL_NAME = "gemini-2.5-flash-preview-09-2025";
         const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
         // ----------------------------
 
-        // --- FIREBASE INITIALIZATION (Streamlined) ---
+        // --- FIREBASE INITIALIZATION (Streamlined to only handle Auth/UID) ---
         window.firebaseInit = async function() {
             const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
 
@@ -81,19 +79,19 @@
         }
 
         window.addEventListener('load', window.firebaseInit);
-        
-        // --- DELETED: All Save/Share/History Functions ---
 
         // --- UTILITY FUNCTIONS ---
 
         // Utility function to safely extract JSON array/object from text, handling pre-text and wrappers.
         function extractJson(text) {
             let jsonString = null;
-            let match = text.match(/```json\s*([\s\S]*?)\s*```/);
 
+            let match = text.match(/```json\s*([\s\S]*?)\s*```/);
             if (match) {
                 jsonString = match[1];
-            } else {
+            }
+
+            if (!jsonString) {
                 const firstBracket = text.indexOf('[');
                 const lastBracket = text.lastIndexOf(']');
                 
@@ -178,6 +176,8 @@
             const html = planData.map(day => `
                 <div class="bg-white p-6 rounded-xl shadow-md transition duration-300 hover:shadow-lg">
                     <h3 class="text-xl font-bold text-primary-teal mb-2">Day ${day.day}: ${day.theme}</h3>
+                    
+                    <!-- DISPLAY ONLY THE REFERENCE -->
                     <p class="text-base text-dark-teal bg-gray-100 inline-block px-3 py-1 rounded-full shadow-inner mb-4">${day.scripture}</p>
                     
                     ${day.prayerPrompt ? `
@@ -474,7 +474,6 @@
             document.getElementById('generate-button').disabled = true;
             document.getElementById('spinner').classList.remove('hidden');
             document.getElementById('print-options').classList.add('hidden'); 
-            document.getElementById('share-save-container').classList.add('hidden');
 
 
             // Dynamically build the plan type description
@@ -485,16 +484,16 @@
             let planType = components.filter(Boolean).join(', ');
             planType = planType.replace(/,([^,]*)$/, ' and$1');
             
-            // FIX: Updated system prompt to guide model toward paraphrased/summary text to avoid RECITATION error.
+            // FIX: EXTREME PROMPT FIX - Instruct the model to generate a summary/devotional prose instead of full verses to avoid Recitation error.
             const systemPrompt = `You are a world-class, deeply knowledgeable theological assistant specializing in creating structured, daily Bible reading and reflection plans. Your task is to generate a comprehensive ${planType} based on the user's request.
             1. Theme/Topic: The plan must be focused on the user's specific input: "${prompt}".
             2. Duration: The plan must cover exactly ${duration} days.
-            3. Scripture & Passage Text: Provide highly relevant, specific scripture references (Book Chapter:Verse-Verse). The total reading for the day should be composed of passages that sum up to **approximately ${verseCount} verses**. These passages should be drawn from **multiple, unique, non-contiguous references** across the Bible to provide a broad theological view of the theme. **Provide the passage text using paraphrased or summary language to avoid recitation failures.**
+            3. Scripture & Passage Text: Provide highly relevant, specific scripture references (Book Chapter:Verse-Verse). Crucially, for the 'passageText' field, **DO NOT output the full scripture text**. Instead, provide a brief, devotional summary (2-3 sentences) of the passage's meaning and context, ensuring the total prose length is short. The daily reading should be composed of passages that sum up to **approximately ${verseCount} verses**. These passages should be drawn from **multiple, unique, non-contiguous references** across the Bible to provide a broad theological view of the theme.
             4. Reflection: If requested, generate 2-3 thoughtful, non-generic reflection questions or journal prompts per day that encourage deep engagement with the scripture.
             5. Prayer: If requested, generate a concise, focused prayer prompt (a short sentence or two) for each day, related to the reading. If not requested, ensure the 'prayerPrompt' field is an empty string.
             6. Output: Your response MUST be a JSON array of objects conforming exactly to the provided schema. DO NOT include any text outside the JSON block.`;
 
-            const userQuery = `Create a ${duration}-day Bible reading plan focused on the topic: "${prompt}". The reading for each day should be composed of **multiple passages** whose total length is **approximately ${verseCount} verses**. For each day, provide the scripture reference(s) AND the combined full passage text. ${includePrompts ? 'Include relevant reflection questions/journal prompts.' : 'Do not include reflection questions.'} ${includePrayer ? 'Include a concise prayer prompt for each day.' : 'Do not include a prayer prompt.'}`;
+            const userQuery = `Create a ${duration}-day Bible reading plan focused on the topic: "${prompt}". The reading for each day should be composed of **multiple passages** whose total length is **approximately ${verseCount} verses**. For each day, provide the scripture reference(s) AND a concise devotional summary of the passage's meaning. ${includePrompts ? 'Include relevant reflection questions/journal prompts.' : 'Do not include reflection questions.'} ${includePrayer ? 'Include a concise prayer prompt for each day.' : 'Do not include a prayer prompt.'}`;
 
             const responseSchema = {
                 type: "ARRAY",
@@ -504,7 +503,7 @@
                         "day": { "type": "INTEGER", "description": "The day number in the reading plan (1, 2, 3, etc.)." },
                         "theme": { "type": "STRING", "description": "A short, descriptive theme or title for the day's reading." },
                         "scripture": { "type": "STRING", "description": "The specific Bible reference(s) for the reading (e.g., 'Genesis 1:1-2:3, Psalm 23:1-6')." },
-                        "passageText": { "type": "STRING", "description": "The combined full text of the corresponding scripture passages for the day." },
+                        "passageText": { "type": "STRING", "description": "A devotional summary or paraphrase of the passage text (2-3 sentences)." },
                         "reflectionQuestions": {
                             "type": "ARRAY",
                             "description": "A list of 2-3 reflection questions or journal prompts. If the user did not request prompts, this array should be empty.",
@@ -705,19 +704,6 @@
                 </form>
             </div>
             
-            <!-- Share & Save Container (Now Hidden) -->
-            <div id="share-save-container" class="bg-white p-6 md:p-8 rounded-xl card mb-10 hidden">
-                <h2 class="text-xl font-semibold mb-4 text-gray-700">Manage Plan</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <button id="save-button" onclick="savePlanToHistory()" class="w-full bg-dark-teal text-white py-3 rounded-xl font-semibold hover:bg-primary-teal transition duration-300 focus:outline-none focus:ring-4 focus:ring-dark-teal focus:ring-opacity-50">
-                        Save to History
-                    </button>
-                    <button id="share-button" onclick="sharePlan()" class="w-full bg-secondary-gold text-dark-teal py-3 rounded-xl font-semibold hover:bg-dark-teal transition duration-300 focus:outline-none focus:ring-4 focus:ring-secondary-gold focus:ring-opacity-50">
-                        Share Plan
-                    </button>
-                </div>
-            </div>
-
             <!-- Print Options (Added Screenshot button) -->
             <div id="print-options" class="bg-white p-6 md:p-8 rounded-xl card mb-10 hidden">
                 <h2 class="text-xl font-semibold mb-4 text-gray-700">Output Options</h2>
