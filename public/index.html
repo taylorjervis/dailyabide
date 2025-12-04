@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BIBLEPLAN.AI Generator</title>
+    <title>AI Bible Reading Plan Generator</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -12,12 +12,14 @@
             theme: {
                 extend: {
                     colors: {
+                        // REVERTED TO ORIGINAL VIBRANT COLORS
                         'primary-teal': '#008080',
                         'secondary-gold': '#FFD700',
                         'dark-teal': '#006666',
-                        'light-gray': '#FAFAFA',
+                        'light-gray': '#FAFAFA', // Softer background
                     },
                     fontFamily: {
+                        // Using system font stack (San Francisco/Segoe UI/Roboto)
                         sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
                     },
                 }
@@ -29,7 +31,7 @@
     
     <!-- Firebase Imports (Required boilerplate) -->
     <script type="module">
-        // Global State Variables
+        // Global variables
         window.currentPlan = null;
         window.currentPlanDetails = null;
         window.db = null;
@@ -38,11 +40,12 @@
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
         import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, addDoc, setDoc, onSnapshot, collection, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // NOTE: Firestore functions were slightly adjusted to match best practices
+        import { getFirestore, doc, getDoc, addDoc, setDoc, onSnapshot, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- GEMINI API CONSTANTS ---
-        const API_KEY = "AIzaSyD_ek_hSwgGKV32k4qBZV-zq5_Cgb7aVRo"; 
+        const API_KEY = ""; 
         const MODEL_NAME = "gemini-2.5-flash-preview-09-2025";
         const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
         // ----------------------------
@@ -66,8 +69,10 @@
                         await signInAnonymously(window.auth);
                     }
                     window.userId = window.auth.currentUser?.uid || crypto.randomUUID();
+                    // This is where the error occurred (now fixed by ensuring the element exists)
                     document.getElementById('user-id-display').textContent = `User ID: ${window.userId}`;
                     
+                    // FIX: Ensure loadHistory and checkSharedPlanInURL runs ONLY after successful auth/db setup
                     if (window.db && window.userId) {
                         loadHistory();
                         checkSharedPlanInURL();
@@ -75,11 +80,13 @@
                 } catch (error) {
                     console.error("Firebase Auth Error:", error);
                     window.userId = crypto.randomUUID();
+                    // This is where the error occurred (now fixed by ensuring the element exists)
                     document.getElementById('user-id-display').textContent = `User ID: ${window.userId} (Anon Error)`;
                 }
             } else {
                 console.warn("Firebase config not found. Running in standalone mode.");
                 window.userId = crypto.randomUUID();
+                // This is where the error occurred (now fixed by ensuring the element exists)
                 document.getElementById('user-id-display').textContent = `User ID: ${window.userId} (Anon Error)`;
                 checkSharedPlanInURL();
             }
@@ -89,6 +96,7 @@
 
         // --- FIREBASE HISTORY FUNCTIONS ---
         const USER_PLANS_PATH = `artifacts/${appId}/users/`;
+        // FIX: Added 'data' segment to ensure an odd number of segments for public collection reference
         const PUBLIC_PLANS_PATH = `artifacts/${appId}/public/data/plans`;
 
         /**
@@ -98,12 +106,14 @@
             if (!window.db || !window.userId) return;
 
             const plansRef = collection(window.db, USER_PLANS_PATH, window.userId, 'plans');
+            // Note: Firebase `orderBy` requires an index, we sort client-side for simplicity
             const q = query(plansRef);
 
             onSnapshot(q, (snapshot) => {
                 const plans = [];
                 snapshot.forEach((doc) => {
-                    plans.push({ id: doc.id, ...doc.data() });
+                    const data = doc.data();
+                    plans.push({ id: doc.id, ...data });
                 });
                 // Sort client-side by creation date (newest first)
                 plans.sort((a, b) => {
@@ -133,8 +143,8 @@
 
             try {
                 await addDoc(plansCollectionRef, {
-                    ...window.currentPlanDetails,
-                    planData: JSON.stringify(window.currentPlan),
+                    ...window.currentPlanDetails, // prompt, duration, verse count, options
+                    planData: JSON.stringify(window.currentPlan), // Save plan data as string
                     createdAt: serverTimestamp(),
                     isShared: false,
                 });
@@ -156,6 +166,7 @@
          * Shares the current plan by saving it to a public collection and generating a link.
          */
         window.sharePlan = async function() {
+             // Check that a plan exists AND Firebase is ready
             if (!window.currentPlan || !window.currentPlanDetails || !window.db) {
                 displayError("Error: Please generate a plan and ensure the app is fully connected to the database before sharing.");
                 return;
@@ -167,6 +178,7 @@
             shareButton.textContent = 'Generating Link...';
 
             try {
+                // 1. Save plan to public collection
                 const newDocRef = doc(publicPlansRef);
                 const planId = newDocRef.id;
 
@@ -177,6 +189,8 @@
                     userId: window.userId,
                 });
 
+                // 2. Generate and copy URL
+                // Use a generic placeholder path to ensure the link works relative to the app origin
                 const baseUrl = window.location.origin + window.location.pathname.replace(/\/$/, '');
                 const shareUrl = `${baseUrl}?planId=${planId}`;
                 copyToClipboard(shareUrl);
@@ -195,6 +209,8 @@
             }
         }
         
+        // --- VIEWING SHARED PLANS ---
+
         /**
          * Checks the URL for a planId parameter and loads the plan if found.
          */
@@ -206,6 +222,7 @@
                 document.getElementById('input-card').classList.add('hidden');
                 document.getElementById('loading-message').textContent = `Loading shared plan ID: ${planId}...`;
                 document.getElementById('loading-message').classList.remove('hidden');
+                // document.getElementById('history-sidebar').classList.add('hidden'); // Removed as sidebar is now a footer item
                 loadSharedPlan(planId);
             }
         }
@@ -246,6 +263,8 @@
                 document.getElementById('loading-message').classList.add('hidden');
             }
         }
+
+        // --- UI RENDER FUNCTIONS ---
 
         /**
          * Renders the user's history list in the sidebar.
@@ -296,6 +315,7 @@
 
                 document.getElementById('plan-output-title').textContent = `Loaded from History: ${plan.prompt}`;
                 document.getElementById('plan-output-title').classList.remove('hidden');
+                
                 document.getElementById('input-card').classList.remove('hidden');
                 
                 renderPlan(parsedPlan);
@@ -317,12 +337,14 @@
         function extractJson(text) {
             let jsonString = null;
 
+            // 1. Try to find content within a markdown block first (safest method)
             let match = text.match(/```json\s*([\s\S]*?)\s*```/);
             if (match) {
                 jsonString = match[1];
             }
 
             if (!jsonString) {
+                // 2. Fallback: Search for the first '[' and last ']' to extract the JSON array.
                 const firstBracket = text.indexOf('[');
                 const lastBracket = text.lastIndexOf(']');
                 
@@ -333,9 +355,11 @@
             
             if (jsonString) {
                 try {
+                    // Try to parse the cleaned JSON string
                     return JSON.parse(jsonString.trim());
                 } catch (e) {
                     console.error("Failed to parse extracted JSON string:", e);
+                    // ADDED console.error for problematic JSON snippet
                     console.error("Problematic JSON snippet:", jsonString.trim().substring(0, 200) + '...');
                     return null;
                 }
@@ -405,8 +429,9 @@
                 return;
             }
 
+            // Show post-generation options
             document.getElementById('print-options').classList.remove('hidden');
-            document.getElementById('share-save-container').classList.remove('hidden');
+            // document.getElementById('share-save-container').classList.remove('hidden'); // Removed share/save container
 
             const html = planData.map(day => `
                 <div class="bg-white p-6 rounded-xl shadow-md transition duration-300 hover:shadow-lg">
@@ -723,12 +748,12 @@
             const systemPrompt = `You are a world-class, deeply knowledgeable theological assistant specializing in creating structured, daily Bible reading and reflection plans. Your task is to generate a comprehensive ${planType} based on the user's request.
             1. Theme/Topic: The plan must be focused on the user's specific input: "${prompt}".
             2. Duration: The plan must cover exactly ${duration} days.
-            3. Scripture & Passage Text: Provide highly relevant, specific scripture references (Book Chapter:Verse-Verse). Crucially, include the full, corresponding text of the passage. The total reading for the day must consist of passages that sum up to **approximately ${verseCount} verses**. These passages should be drawn from **multiple, non-contiguous references** across the Bible to provide a broad theological view of the theme.
+            3. Scripture & Passage Text: Provide highly relevant, specific scripture references (Book Chapter:Verse-Verse). Crucially, include the full, corresponding text of the passage. The total reading for the day should be composed of passages that sum up to **approximately ${verseCount} verses**. These passages should be drawn from **multiple, non-contiguous references** across the Bible to provide a broad theological view of the theme.
             4. Reflection: If requested, generate 2-3 thoughtful, non-generic reflection questions or journal prompts per day that encourage deep engagement with the scripture.
             5. Prayer: If requested, generate a concise, focused prayer prompt (a short sentence or two) for each day, related to the reading. If not requested, ensure the 'prayerPrompt' field is an empty string.
             6. Output: Your response MUST be a JSON array of objects conforming exactly to the provided schema. DO NOT include any text outside the JSON block.`;
 
-            const userQuery = `Create a ${duration}-day Bible reading plan focused on the topic: "${prompt}". The reading for each day must be composed of **multiple passages** whose total length is **approximately ${verseCount} verses**. For each day, provide the scripture reference(s) AND the combined full passage text. ${includePrompts ? 'Include relevant reflection questions/journal prompts.' : 'Do not include reflection questions.'} ${includePrayer ? 'Include a concise prayer prompt for each day.' : 'Do not include a prayer prompt.'}`;
+            const userQuery = `Create a ${duration}-day Bible reading plan focused on the topic: "${prompt}". The reading for each day should be composed of **multiple passages** whose total length is **approximately ${verseCount} verses**. For each day, provide the scripture reference(s) AND the combined full passage text. ${includePrompts ? 'Include relevant reflection questions/journal prompts.' : 'Do not include reflection questions.'} ${includePrayer ? 'Include a concise prayer prompt for each day.' : 'Do not include a prayer prompt.'}`;
 
             const responseSchema = {
                 type: "ARRAY",
@@ -939,7 +964,7 @@
                 </form>
             </div>
             
-            <!-- Share & Save Container -->
+            <!-- Share & Save Container (Now Hidden) -->
             <div id="share-save-container" class="bg-white p-6 md:p-8 rounded-xl card mb-10 hidden">
                 <h2 class="text-xl font-semibold mb-4 text-gray-700">Manage Plan</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1017,12 +1042,12 @@
     <!-- SLIMMER VERSION -->
     <div class="newsletter-container bg-white rounded-xl shadow-lg border border-gray-200 p-4 mx-auto mt-6 mb-10">
         <p class="text-center text-gray-700 mb-4 text-sm font-semibold">
-            Subscribe for weekly devos from the creator
+            Subscribe for weekly devos to your email inbox
         </p>
         
         <!-- Beehiiv Form Start -->
         <!-- IMPORTANT: You MUST replace the 'action' URL and the 'name'/'value' fields below with the exact data from your Beehiiv form embed code. -->
-        <form id="beehiiv-form" action="[PASTE YOUR BEEHIIV FORM SUBMISSION URL HERE]" method="post" target="_blank" class="flex flex-col md:flex-row gap-2">
+        <form id="beehiiv-form" action="[https://subscribe-forms.beehiiv.com/a6f8eef8-f8e7-4571-9d1f-55a335f73e15]" method="post" target="_blank" class="flex flex-col md:flex-row gap-2">
             <input 
                 type="email" 
                 name="email" 
