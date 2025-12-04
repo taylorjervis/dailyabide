@@ -491,8 +491,10 @@
             // LOGIC FOR EXACT VERSE COUNT: Adjust query based on input
             let readingConstraint;
             if (verseCount === '1') {
+                // FIX: If 1 verse, enforce single passage for maximum precision
                 readingConstraint = `a single passage of **EXACTLY 1 verse**.`;
             } else {
+                // If more than 1 verse, use the flexible multi-passage approach
                 readingConstraint = `multiple passages whose total length is **EXACTLY ${verseCount} verses**. These passages should be drawn from **multiple, unique, non-contiguous references** across the Bible to provide a broad theological view of the theme.`;
             }
 
