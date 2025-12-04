@@ -26,8 +26,7 @@
             }
         }
     </script>
-    <!-- html2canvas for screenshot functionality -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- html2canvas is now unnecessary for the screenshot function, but remains in the browser cache -->
     
     <!-- Firebase Imports (Minimal Set) -->
     <script type="module">
@@ -39,6 +38,8 @@
         // --- MINIMAL FIREBASE IMPORTS (No Firestore since history/sharing is gone) ---
         import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // NOTE: Firestore functions were slightly adjusted to match best practices
+        import { getFirestore, doc, getDoc, addDoc, setDoc, onSnapshot, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- GEMINI API CONSTANTS ---
         const API_KEY = "AIzaSyCb5IaHMO36vJ7VSpSYPbIWC2pSctTJlgs";
@@ -177,8 +178,11 @@
                 <div class="bg-white p-6 rounded-xl shadow-md transition duration-300 hover:shadow-lg">
                     <h3 class="text-xl font-bold text-primary-teal mb-2">Day ${day.day}: ${day.theme}</h3>
                     
-                    <!-- DISPLAY ONLY THE REFERENCE -->
-                    <p class="text-base text-dark-teal bg-gray-100 inline-block px-3 py-1 rounded-full shadow-inner mb-4">${day.scripture}</p>
+                    <!-- MODIFIED: Added "To read:" prefix -->
+                    <p class="text-base text-gray-700 mb-4">
+                        <span class="font-semibold text-primary-teal">To read:</span> 
+                        <span class="text-dark-teal">${day.scripture}</span>
+                    </p>
                     
                     ${day.prayerPrompt ? `
                         <div class="mt-4 bg-gray-50 p-4 rounded-lg border-l-4 border-dark-teal">
@@ -211,7 +215,7 @@
             outputDiv.innerHTML = html;
         }
 
-        // --- PRINTING FUNCTIONS (KEPT SAME) ---
+        // --- PRINTING FUNCTIONS ---
         
         window.printSimplePlan = function() {
             if (!window.currentPlan || !window.currentPlanDetails) {
@@ -484,16 +488,25 @@
             let planType = components.filter(Boolean).join(', ');
             planType = planType.replace(/,([^,]*)$/, ' and$1');
             
+            // LOGIC FOR EXACT VERSE COUNT: Adjust query based on input
+            let readingConstraint;
+            if (verseCount === '1') {
+                readingConstraint = `a single passage of **EXACTLY 1 verse**.`;
+            } else {
+                readingConstraint = `multiple passages whose total length is **EXACTLY ${verseCount} verses**. These passages should be drawn from **multiple, unique, non-contiguous references** across the Bible to provide a broad theological view of the theme.`;
+            }
+
             // FIX: EXTREME PROMPT FIX - Instruct the model to generate a summary/devotional prose instead of full verses to avoid Recitation error.
             const systemPrompt = `You are a world-class, deeply knowledgeable theological assistant specializing in creating structured, daily Bible reading and reflection plans. Your task is to generate a comprehensive ${planType} based on the user's request.
             1. Theme/Topic: The plan must be focused on the user's specific input: "${prompt}".
             2. Duration: The plan must cover exactly ${duration} days.
-            3. Scripture & Passage Text: Provide highly relevant, specific scripture references (Book Chapter:Verse-Verse). Crucially, for the 'passageText' field, **DO NOT output the full scripture text**. Instead, provide a brief, devotional summary (2-3 sentences) of the passage's meaning and context, ensuring the total prose length is short. The daily reading should be composed of passages that sum up to **approximately ${verseCount} verses**. These passages should be drawn from **multiple, unique, non-contiguous references** across the Bible to provide a broad theological view of the theme.
+            3. Scripture & Passage Text: Provide highly relevant, specific scripture references (Book Chapter:Verse-Verse). Crucially, for the 'passageText' field, **DO NOT output the full scripture text**. Instead, provide a brief, devotional summary (2-3 sentences) of the passage's meaning and context, ensuring the total prose length is short. The daily reading should be ${readingConstraint}
             4. Reflection: If requested, generate 2-3 thoughtful, non-generic reflection questions or journal prompts per day that encourage deep engagement with the scripture.
             5. Prayer: If requested, generate a concise, focused prayer prompt (a short sentence or two) for each day, related to the reading. If not requested, ensure the 'prayerPrompt' field is an empty string.
             6. Output: Your response MUST be a JSON array of objects conforming exactly to the provided schema. DO NOT include any text outside the JSON block.`;
 
-            const userQuery = `Create a ${duration}-day Bible reading plan focused on the topic: "${prompt}". The reading for each day should be composed of **multiple passages** whose total length is **approximately ${verseCount} verses**. For each day, provide the scripture reference(s) AND a concise devotional summary of the passage's meaning. ${includePrompts ? 'Include relevant reflection questions/journal prompts.' : 'Do not include reflection questions.'} ${includePrayer ? 'Include a concise prayer prompt for each day.' : 'Do not include a prayer prompt.'}`;
+            // Updated user query to reflect EXACT constraint
+            const userQuery = `Create a ${duration}-day Bible reading plan focused on the topic: "${prompt}". The reading for each day must be ${readingConstraint} For each day, provide the scripture reference(s) AND a concise devotional summary of the passage's meaning. ${includePrompts ? 'Include relevant reflection questions/journal prompts.' : 'Do not include reflection questions.'} ${includePrayer ? 'Include a concise prayer prompt for each day.' : 'Do not include a prayer prompt.'}`;
 
             const responseSchema = {
                 type: "ARRAY",
@@ -712,7 +725,7 @@
                         Screenshot Plan
                     </button>
                     <button onclick="printSimplePlan()" class="w-full bg-secondary-gold text-dark-teal py-3 rounded-xl font-semibold hover:bg-dark-teal transition duration-300 focus:outline-none focus:ring-4 focus:ring-secondary-gold focus:ring-opacity-50">
-                        Print Simple Plan (Detailed)
+                        Print Detailed Plan
                     </button>
                     <button onclick="printHabitTracker()" class="w-full bg-secondary-gold text-dark-teal py-3 rounded-xl font-semibold hover:bg-dark-teal transition duration-300 focus:outline-none focus:ring-4 focus:ring-secondary-gold focus:ring-opacity-50">
                         Print Habit Tracker (Spreadsheet)
