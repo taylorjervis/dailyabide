@@ -29,322 +29,70 @@
     <!-- html2canvas for screenshot functionality -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
-    <!-- Firebase Imports (Required boilerplate) -->
+    <!-- Firebase Imports (Minimal Set) -->
     <script type="module">
-        // Global variables
+        // Global State Variables
         window.currentPlan = null;
         window.currentPlanDetails = null;
-        window.db = null;
-        window.auth = null;
         window.userId = null;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
+        
+        // Removed unused Firestore imports since history/sharing is gone.
         import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        // NOTE: Firestore functions were slightly adjusted to match best practices
-        import { getFirestore, doc, getDoc, addDoc, setDoc, onSnapshot, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        
         // --- GEMINI API CONSTANTS ---
-        const API_KEY = "AIzaSyD_ek_hSwgGKV32k4qBZV-zq5_Cgb7aVRo"; 
+        const API_KEY = "AIzaSyD0aD4-U-uqZ000Mwo1zJ8kaK_9nPer-YY"; 
         const MODEL_NAME = "gemini-2.5-flash-preview-09-2025";
         const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
         // ----------------------------
 
-        // --- FIREBASE INITIALIZATION AND AUTHENTICATION ---
+        // --- FIREBASE INITIALIZATION (Streamlined) ---
         window.firebaseInit = async function() {
             const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
 
             if (firebaseConfig) {
                 const app = initializeApp(firebaseConfig);
-                window.auth = getAuth(app);
-                window.db = getFirestore(app);
+                const auth = getAuth(app);
                 setLogLevel('debug');
 
                 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
                 
                 try {
                     if (initialAuthToken) {
-                        await signInWithCustomToken(window.auth, initialAuthToken);
+                        await signInWithCustomToken(auth, initialAuthToken);
                     } else {
-                        await signInAnonymously(window.auth);
+                        await signInAnonymously(auth);
                     }
-                    window.userId = window.auth.currentUser?.uid || crypto.randomUUID();
-                    // This is where the error occurred (now fixed by ensuring the element exists)
+                    window.userId = auth.currentUser?.uid || crypto.randomUUID();
                     document.getElementById('user-id-display').textContent = `User ID: ${window.userId}`;
                     
-                    // FIX: Ensure loadHistory and checkSharedPlanInURL runs ONLY after successful auth/db setup
-                    if (window.db && window.userId) {
-                        loadHistory();
-                        checkSharedPlanInURL();
-                    }
                 } catch (error) {
                     console.error("Firebase Auth Error:", error);
                     window.userId = crypto.randomUUID();
-                    // This is where the error occurred (now fixed by ensuring the element exists)
                     document.getElementById('user-id-display').textContent = `User ID: ${window.userId} (Anon Error)`;
                 }
             } else {
                 console.warn("Firebase config not found. Running in standalone mode.");
                 window.userId = crypto.randomUUID();
-                // This is where the error occurred (now fixed by ensuring the element exists)
                 document.getElementById('user-id-display').textContent = `User ID: ${window.userId} (Anon Error)`;
-                checkSharedPlanInURL();
             }
+            // DELETED: All loadHistory and checkSharedPlanInURL functions as history is removed.
         }
 
         window.addEventListener('load', window.firebaseInit);
-
-        // --- FIREBASE HISTORY FUNCTIONS ---
-        const USER_PLANS_PATH = `artifacts/${appId}/users/`;
-        // FIX: Added 'data' segment to ensure an odd number of segments for public collection reference
-        const PUBLIC_PLANS_PATH = `artifacts/${appId}/public/data/plans`;
-
-        /**
-         * Loads the user's past plan history in real-time.
-         */
-        function loadHistory() {
-            if (!window.db || !window.userId) return;
-
-            const plansRef = collection(window.db, USER_PLANS_PATH, window.userId, 'plans');
-            // Note: Firebase `orderBy` requires an index, we sort client-side for simplicity
-            const q = query(plansRef);
-
-            onSnapshot(q, (snapshot) => {
-                const plans = [];
-                snapshot.forEach((doc) => {
-                    const data = doc.data();
-                    plans.push({ id: doc.id, ...data });
-                });
-                // Sort client-side by creation date (newest first)
-                plans.sort((a, b) => {
-                    const dateA = a.createdAt ? a.createdAt.toDate().getTime() : 0;
-                    const dateB = b.createdAt ? b.createdAt.toDate().getTime() : 0;
-                    return dateB - dateA; 
-                });
-                renderHistoryList(plans);
-            }, (error) => {
-                console.error("Error loading history:", error);
-                document.getElementById('history-list').innerHTML = '<p class="text-red-500">Failed to load history.</p>';
-            });
-        }
-
-        /**
-         * Saves the current generated plan to the user's private history.
-         */
-        window.savePlanToHistory = async function() {
-            if (!window.currentPlan || !window.currentPlanDetails || !window.db || !window.userId) {
-                displayError("Error: Please generate a plan and ensure the app is fully connected to the database before saving.");
-                return;
-            }
-
-            const plansCollectionRef = collection(window.db, USER_PLANS_PATH, window.userId, 'plans');
-            const saveButton = document.getElementById('save-button');
-            saveButton.disabled = true;
-
-            try {
-                await addDoc(plansCollectionRef, {
-                    ...window.currentPlanDetails, // prompt, duration, verse count, options
-                    planData: JSON.stringify(window.currentPlan), // Save plan data as string
-                    createdAt: serverTimestamp(),
-                    isShared: false,
-                });
-                saveButton.textContent = 'Plan Saved!';
-                setTimeout(() => {
-                    saveButton.textContent = 'Save to History';
-                    saveButton.disabled = false;
-                }, 3000);
-
-            } catch (error) {
-                console.error("Error saving plan:", error);
-                displayError("Failed to save plan to history.");
-                saveButton.textContent = 'Save to History (Error)';
-                saveButton.disabled = false;
-            }
-        }
-
-        /**
-         * Shares the current plan by saving it to a public collection and generating a link.
-         */
-        window.sharePlan = async function() {
-             // Check that a plan exists AND Firebase is ready
-            if (!window.currentPlan || !window.currentPlanDetails || !window.db) {
-                displayError("Error: Please generate a plan and ensure the app is fully connected to the database before sharing.");
-                return;
-            }
-
-            const publicPlansRef = collection(window.db, PUBLIC_PLANS_PATH);
-            const shareButton = document.getElementById('share-button');
-            shareButton.disabled = true;
-            shareButton.textContent = 'Generating Link...';
-
-            try {
-                // 1. Save plan to public collection
-                const newDocRef = doc(publicPlansRef);
-                const planId = newDocRef.id;
-
-                await setDoc(newDocRef, {
-                    ...window.currentPlanDetails,
-                    planData: JSON.stringify(window.currentPlan), 
-                    sharedAt: serverTimestamp(),
-                    userId: window.userId,
-                });
-
-                // 2. Generate and copy URL
-                // Use a generic placeholder path to ensure the link works relative to the app origin
-                const baseUrl = window.location.origin + window.location.pathname.replace(/\/$/, '');
-                const shareUrl = `${baseUrl}?planId=${planId}`;
-                copyToClipboard(shareUrl);
-
-                shareButton.textContent = 'Link Copied!';
-                setTimeout(() => {
-                    shareButton.textContent = 'Share Plan';
-                    shareButton.disabled = false;
-                }, 3000);
-
-            } catch (error) {
-                console.error("Error sharing plan:", error);
-                displayError("Failed to share plan.");
-                shareButton.textContent = 'Share Plan (Error)';
-                shareButton.disabled = false;
-            }
-        }
         
-        // --- VIEWING SHARED PLANS ---
-
-        /**
-         * Checks the URL for a planId parameter and loads the plan if found.
-         */
-        function checkSharedPlanInURL() {
-            const params = new URLSearchParams(window.location.search);
-            const planId = params.get('planId');
-
-            if (planId) {
-                document.getElementById('input-card').classList.add('hidden');
-                document.getElementById('loading-message').textContent = `Loading shared plan ID: ${planId}...`;
-                document.getElementById('loading-message').classList.remove('hidden');
-                // document.getElementById('history-sidebar').classList.add('hidden'); // Removed as sidebar is now a footer item
-                loadSharedPlan(planId);
-            }
-        }
-
-        /**
-         * Fetches and displays a public shared plan.
-         */
-        async function loadSharedPlan(planId) {
-            if (!window.db) {
-                displayError("Database initialization is pending. Please wait a moment and refresh.");
-                return;
-            }
-
-            const docRef = doc(window.db, PUBLIC_PLANS_PATH, planId);
-
-            try {
-                const docSnap = await getDoc(docRef);
-
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    const parsedPlan = JSON.parse(data.planData);
-                    
-                    window.currentPlan = parsedPlan;
-                    window.currentPlanDetails = data; 
-
-                    document.getElementById('plan-output-title').textContent = `Shared Reading Plan: ${data.prompt} (${data.duration} Days)`;
-                    document.getElementById('plan-output-title').classList.remove('hidden');
-                    renderPlan(parsedPlan);
-                    document.getElementById('share-save-container').classList.add('hidden');
-                    document.getElementById('loading-message').classList.add('hidden');
-                } else {
-                    displayError(`Shared plan ID "${planId}" not found.`);
-                }
-            } catch (error) {
-                console.error("Error loading shared plan:", error);
-                displayError("Failed to load the shared plan. Check the URL and try again.");
-            } finally {
-                document.getElementById('loading-message').classList.add('hidden');
-            }
-        }
-
-        // --- UI RENDER FUNCTIONS ---
-
-        /**
-         * Renders the user's history list in the sidebar.
-         */
-        function renderHistoryList(plans) {
-            const listContainer = document.getElementById('history-list');
-            listContainer.innerHTML = '';
-            
-            if (plans.length === 0) {
-                listContainer.innerHTML = '<p class="text-sm text-gray-500 p-2">No saved plans yet. Generate and save one!</p>';
-                return;
-            }
-
-            plans.forEach(plan => {
-                const date = plan.createdAt ? plan.createdAt.toDate().toLocaleDateString() : 'N/A';
-                const listItem = document.createElement('div');
-                listItem.className = 'p-3 bg-white hover:bg-gray-100 border-b border-gray-200 cursor-pointer rounded-lg mb-1 transition duration-150 shadow-sm';
-                listItem.innerHTML = `
-                    <p class="text-sm font-semibold text-primary-teal">${plan.prompt}</p>
-                    <p class="text-xs text-gray-500">${plan.duration} Days - ${date}</p>
-                `;
-                listItem.onclick = () => loadPlanFromHistory(plan);
-                listContainer.appendChild(listItem);
-            });
-        }
-        
-        /**
-         * Loads and displays a plan saved in the user's history.
-         */
-        function loadPlanFromHistory(plan) {
-            try {
-                const parsedPlan = JSON.parse(plan.planData);
-                
-                window.currentPlan = parsedPlan;
-                window.currentPlanDetails = {
-                     prompt: plan.prompt,
-                     duration: plan.duration,
-                     maxVerses: plan.maxVerses,
-                     includePrompts: plan.includePrompts,
-                     includePrayer: plan.includePrayer,
-                };
-
-                document.getElementById('prompt').value = plan.prompt || '';
-                document.getElementById('duration').value = plan.duration || '7';
-                document.getElementById('max-verses').value = plan.maxVerses || '1';
-                document.getElementById('journal-prompts').checked = plan.includePrompts || false;
-                document.getElementById('prayer-prompt').checked = plan.includePrayer || false;
-
-                document.getElementById('plan-output-title').textContent = `Loaded from History: ${plan.prompt}`;
-                document.getElementById('plan-output-title').classList.remove('hidden');
-                
-                document.getElementById('input-card').classList.remove('hidden');
-                
-                renderPlan(parsedPlan);
-
-                document.getElementById('share-save-container').classList.remove('hidden');
-                document.getElementById('save-button').textContent = 'Save to History';
-                document.getElementById('save-button').disabled = false;
-
-            } catch (e) {
-                console.error("Failed to load plan from history:", e);
-                displayError("Failed to load this plan due to data corruption.");
-            }
-        }
-
+        // --- DELETED: All Save/Share/History Functions ---
 
         // --- UTILITY FUNCTIONS ---
 
         // Utility function to safely extract JSON array/object from text, handling pre-text and wrappers.
         function extractJson(text) {
             let jsonString = null;
-
-            // 1. Try to find content within a markdown block first (safest method)
             let match = text.match(/```json\s*([\s\S]*?)\s*```/);
+
             if (match) {
                 jsonString = match[1];
-            }
-
-            if (!jsonString) {
-                // 2. Fallback: Search for the first '[' and last ']' to extract the JSON array.
+            } else {
                 const firstBracket = text.indexOf('[');
                 const lastBracket = text.lastIndexOf(']');
                 
@@ -355,11 +103,9 @@
             
             if (jsonString) {
                 try {
-                    // Try to parse the cleaned JSON string
                     return JSON.parse(jsonString.trim());
                 } catch (e) {
                     console.error("Failed to parse extracted JSON string:", e);
-                    // ADDED console.error for problematic JSON snippet
                     console.error("Problematic JSON snippet:", jsonString.trim().substring(0, 200) + '...');
                     return null;
                 }
@@ -386,14 +132,13 @@
         }
         
         /**
-         * Copies text to the clipboard using the older document.execCommand approach
-         * which is more reliable in various sandbox environments.
+         * Copies text to the clipboard (kept for screenshot download function)
          */
         function copyToClipboard(text) {
             const textarea = document.createElement('textarea');
             textarea.value = text;
             textarea.style.position = 'fixed';
-            textarea.style.left = '-9999px'; // Move off-screen
+            textarea.style.left = '-9999px';
             document.body.appendChild(textarea);
             textarea.focus();
             textarea.select();
@@ -414,7 +159,6 @@
             document.getElementById('generate-button').disabled = false;
             document.getElementById('spinner').classList.add('hidden');
             document.getElementById('print-options').classList.add('hidden');
-            document.getElementById('share-save-container').classList.add('hidden');
         }
 
         function renderPlan(planData) {
@@ -425,20 +169,16 @@
             if (!planData || planData.length === 0) {
                 outputDiv.innerHTML = '<p class="text-center text-gray-500 p-8 bg-white rounded-xl shadow-lg">The AI did not generate a plan. Please try a different prompt.</p>';
                 document.getElementById('print-options').classList.add('hidden');
-                document.getElementById('share-save-container').classList.add('hidden');
                 return;
             }
 
-            // Show post-generation options
             document.getElementById('print-options').classList.remove('hidden');
-            // document.getElementById('share-save-container').classList.remove('hidden'); // Removed share/save container
 
             const html = planData.map(day => `
                 <div class="bg-white p-6 rounded-xl shadow-md transition duration-300 hover:shadow-lg">
                     <h3 class="text-xl font-bold text-primary-teal mb-2">Day ${day.day}: ${day.theme}</h3>
                     <p class="text-base text-dark-teal bg-gray-100 inline-block px-3 py-1 rounded-full shadow-inner mb-4">${day.scripture}</p>
                     
-                    <!-- Display Prayer Prompt -->
                     ${day.prayerPrompt ? `
                         <div class="mt-4 bg-gray-50 p-4 rounded-lg border-l-4 border-dark-teal">
                             <p class="font-semibold text-dark-teal mb-1 flex items-center">
