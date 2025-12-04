@@ -33,9 +33,8 @@
         // Global State Variables
         window.currentPlan = null;
         window.currentPlanDetails = null;
-        window.userId = null;
         
-        // --- MINIMAL FIREBASE IMPORTS (No Firestore since history/sharing is gone) ---
+        // --- MINIMAL FIREBASE IMPORTS (Auth required only for UID boilerplate) ---
         import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         // NOTE: Firestore functions were slightly adjusted to match best practices
@@ -64,18 +63,12 @@
                     } else {
                         await signInAnonymously(auth);
                     }
-                    window.userId = auth.currentUser?.uid || crypto.randomUUID();
-                    document.getElementById('user-id-display').textContent = `User ID: ${window.userId}`;
                     
                 } catch (error) {
                     console.error("Firebase Auth Error:", error);
-                    window.userId = crypto.randomUUID();
-                    document.getElementById('user-id-display').textContent = `User ID: ${window.userId} (Anon Error)`;
                 }
             } else {
                 console.warn("Firebase config not found. Running in standalone mode.");
-                window.userId = crypto.randomUUID();
-                document.getElementById('user-id-display').textContent = `User ID: ${window.userId} (Anon Error)`;
             }
         }
 
@@ -369,86 +362,6 @@
             printWindow.print();
         }
 
-        // --- NEW: Simplified Print Function for Screenshot/Minimal View ---
-
-        window.printMinimalList = function() {
-            if (!window.currentPlan || !window.currentPlanDetails) {
-                displayError("No plan generated yet to create a snapshot.");
-                return;
-            }
-
-            const promptText = window.currentPlanDetails.prompt;
-            const durationText = window.currentPlanDetails.duration;
-            const includePrompts = document.getElementById('journal-prompts').checked;
-            const includePrayer = document.getElementById('prayer-prompt').checked;
-
-            let listContent = window.currentPlan.map(day => {
-                let dayContent = `<li class="list-item">
-                    <span class="day-ref">Day ${day.day}:</span> 
-                    <span class="scripture-ref">${day.scripture}</span>
-                </li>`;
-
-                if (includePrayer && day.prayerPrompt) {
-                    dayContent += `<li class="prompt-item prayer-prompt">Prayer: ${day.prayerPrompt}</li>`;
-                }
-
-                if (includePrompts && day.reflectionQuestions && day.reflectionQuestions.length > 0) {
-                    const prompts = day.reflectionQuestions.map((q, i) => `(${i+1}) ${q}`).join(' ');
-                    dayContent += `<li class="prompt-item journal-prompt">Journal: ${prompts}</li>`;
-                }
-                
-                return dayContent;
-            }).join('');
-
-            let printContent = `
-                <div class="minimal-list-content">
-                    <h1 class="list-title">BIBLEPLAN.AI Snapshot</h1>
-                    <h2 class="list-subtitle">Topic: ${promptText} (${durationText} Days)</h2>
-                    <ul class="plan-list">
-                        ${listContent}
-                    </ul>
-                </div>
-            `;
-
-            const printWindow = window.open('', '', 'height=600,width=800');
-            printWindow.document.write(`
-                <html>
-                    <head>
-                        <title>Minimal Plan Snapshot</title>
-                        <style>
-                            /* Minimal Styles for Screenshot/PDF Save */
-                            body { margin: 0; padding: 0; font-family: sans-serif; background-color: white; }
-                            .minimal-list-content { padding: 30px; max-width: 500px; margin: 0 auto; }
-                            .list-title { font-size: 20px; color: #006666; font-weight: bold; text-align: center; margin-bottom: 5px; }
-                            .list-subtitle { font-size: 14px; color: #555; text-align: center; margin-bottom: 20px; }
-                            .plan-list { list-style: none; padding: 0; margin: 0; }
-                            .list-item { 
-                                padding: 8px 0; 
-                                border-bottom: 1px dashed #ddd;
-                                display: flex;
-                                font-size: 13px;
-                            }
-                            .prompt-item {
-                                padding: 4px 0 8px 0;
-                                font-size: 11px;
-                                color: #444;
-                                border-bottom: 1px dashed #ddd;
-                                line-height: 1.3;
-                            }
-                            .day-ref { font-weight: bold; color: #008080; width: 30%; flex-shrink: 0; }
-                            .scripture-ref { color: #006666; width: 70%; }
-                            @media print {
-                                .minimal-list-content { max-width: 100%; }
-                            }
-                        </style>
-                    </head>
-                    <body>${printContent}</body>
-                </html>
-            `);
-            printWindow.document.close();
-            printWindow.print(); // Triggers the browser print dialog (Save as PDF/Image)
-        }
-
         // --- MAIN GENERATION LOGIC ---
 
         window.generatePlan = async function(event) {
@@ -642,12 +555,6 @@
             font-size: 1rem; /* Smaller, cleaner reference text */
             font-weight: 500;
         }
-        /* New: Slimmer Newsletter Box */
-        .newsletter-container {
-            max-width: 480px; /* max-w-lg equivalent */
-            padding: 16px; /* p-4 equivalent */
-            margin: 1.5rem auto; /* mt-6 mb-10 */
-        }
         /* Styles for the minimal print view */
         @media print {
             body { margin: 0; padding: 0; font-family: sans-serif; background-color: white; }
@@ -716,7 +623,7 @@
                             <!-- # OF VERSES INPUT -->
                             <div class="col-span-1">
                                 <label for="max-verses" class="block text-sm font-medium text-gray-700 mb-2"># of verses/day</label>
-                                <input type="number" id="max-verses" name="max-verses" required min="1" max="50" value="1" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-teal focus:border-primary-teal transition duration-150">
+                                <input type="number" id="max-verses" name="max-verses" required min="1" max="7" value="1" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-teal focus:border-primary-teal transition duration-150">
                                 <p class="text-xs text-gray-500 mt-1">Limit reading length.</p>
                             </div>
 
@@ -749,10 +656,8 @@
             <!-- Print Options (Added Screenshot button) -->
             <div id="print-options" class="bg-white p-6 md:p-8 rounded-xl card mb-10 hidden">
                 <h2 class="text-xl font-semibold mb-4 text-gray-700">Output Options</h2>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <button id="screenshot-button" onclick="printMinimalList()" class="w-full bg-secondary-gold text-dark-teal py-3 rounded-xl font-semibold hover:bg-dark-teal transition duration-300 focus:outline-none focus:ring-4 focus:ring-secondary-gold focus:ring-opacity-50">
-                        Save as Print Snapshot
-                    </button>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
                     <button onclick="printSimplePlan()" class="w-full bg-secondary-gold text-dark-teal py-3 rounded-xl font-semibold hover:bg-dark-teal transition duration-300 focus:outline-none focus:ring-4 focus:ring-secondary-gold focus:ring-opacity-50">
                         Print Detailed Plan
                     </button>
@@ -781,30 +686,13 @@
 
     </div> <!-- End Main App Content Wrapper -->
 
-    <!-- HISTORY MOVED TO BOTTOM -->
-    <div class="max-w-4xl mx-auto mt-12">
-        <aside id="history-sidebar" class="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
-            <h2 class="text-xl font-bold text-dark-teal mb-4 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Plan History
-            </h2>
-            <div id="history-list" class="space-y-2 max-h-[40vh] overflow-y-auto">
-                <p class="text-sm text-gray-500 p-2">Loading plans...</p>
-            </div>
-            <!-- FIX: Re-added the missing user-id-display element -->
-            <p id="user-id-display" class="text-xs text-gray-400 mt-4 pt-2 border-t"></p> 
-        </aside>
-    </div>
-    <!-- END HISTORY -->
-
     <!-- Footer content -->
     <footer class="mt-12 py-4 text-center text-gray-500 border-t border-gray-300">
         <p class="text-sm">
             created by 
             <a href="https://heyjerv.beehiiv.com" target="_blank" class="text-primary-teal hover:text-dark-teal font-semibold">taylor jervis</a>. 
-            <a href="mailto:heyjerv@gmail.com" class="text-primary-teal hover:text-dark-teal font-semibold">contact</a> for help or to say hi.
+            <a href="mailto:heyjerv@gmail.com" class="text-primary-teal hover:text-dark-teal font-semibold">contact</a> for help or to say hi. 
+            <a href="https://venmo.com/u/jervis" target="_blank" class="text-primary-teal hover:text-dark-teal font-semibold">donate</a> to keep this alive.
         </p>
     </footer>
     
