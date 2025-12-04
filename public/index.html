@@ -39,7 +39,9 @@
         // Removed unused Firestore imports since history/sharing is gone.
         import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        
+        // NOTE: Firestore functions were slightly adjusted to match best practices
+        import { getFirestore, doc, getDoc, addDoc, setDoc, onSnapshot, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
         // --- GEMINI API CONSTANTS ---
         const API_KEY = "AIzaSyD0aD4-U-uqZ000Mwo1zJ8kaK_9nPer-YY"; 
         const MODEL_NAME = "gemini-2.5-flash-preview-09-2025";
@@ -76,7 +78,6 @@
                 window.userId = crypto.randomUUID();
                 document.getElementById('user-id-display').textContent = `User ID: ${window.userId} (Anon Error)`;
             }
-            // DELETED: All loadHistory and checkSharedPlanInURL functions as history is removed.
         }
 
         window.addEventListener('load', window.firebaseInit);
@@ -138,7 +139,7 @@
             const textarea = document.createElement('textarea');
             textarea.value = text;
             textarea.style.position = 'fixed';
-            textarea.style.left = '-9999px';
+            textarea.style.left = '-9999px'; // Move off-screen
             document.body.appendChild(textarea);
             textarea.focus();
             textarea.select();
@@ -484,11 +485,11 @@
             let planType = components.filter(Boolean).join(', ');
             planType = planType.replace(/,([^,]*)$/, ' and$1');
             
-            // NOTE: The system prompt remains the same, ensuring full passage text is generated for printing/saving.
+            // FIX: Updated system prompt to guide model toward paraphrased/summary text to avoid RECITATION error.
             const systemPrompt = `You are a world-class, deeply knowledgeable theological assistant specializing in creating structured, daily Bible reading and reflection plans. Your task is to generate a comprehensive ${planType} based on the user's request.
             1. Theme/Topic: The plan must be focused on the user's specific input: "${prompt}".
             2. Duration: The plan must cover exactly ${duration} days.
-            3. Scripture & Passage Text: Provide highly relevant, specific scripture references (Book Chapter:Verse-Verse). Crucially, include the full, corresponding text of the passage. The total reading for the day should be composed of passages that sum up to **approximately ${verseCount} verses**. These passages should be drawn from **multiple, non-contiguous references** across the Bible to provide a broad theological view of the theme. **Do not worry about copyright or recitation checks when providing scripture text.**
+            3. Scripture & Passage Text: Provide highly relevant, specific scripture references (Book Chapter:Verse-Verse). The total reading for the day should be composed of passages that sum up to **approximately ${verseCount} verses**. These passages should be drawn from **multiple, unique, non-contiguous references** across the Bible to provide a broad theological view of the theme. **Provide the passage text using paraphrased or summary language to avoid recitation failures.**
             4. Reflection: If requested, generate 2-3 thoughtful, non-generic reflection questions or journal prompts per day that encourage deep engagement with the scripture.
             5. Prayer: If requested, generate a concise, focused prayer prompt (a short sentence or two) for each day, related to the reading. If not requested, ensure the 'prayerPrompt' field is an empty string.
             6. Output: Your response MUST be a JSON array of objects conforming exactly to the provided schema. DO NOT include any text outside the JSON block.`;
